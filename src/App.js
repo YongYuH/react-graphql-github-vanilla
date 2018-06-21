@@ -36,6 +36,18 @@ const getIssuesOfRepositoryQuery = (organization, repository) => `
   }
 `;
 
+const getIssuesOfRepository = path => {
+  const [organization, repository] = path.split('/');
+  return axiosGitHubGraphQL.post('', {
+    query: getIssuesOfRepositoryQuery(organization, repository),
+  });
+};
+
+const resolveIssuesQuery = queryResult => ({
+  errors: queryResult.data.errors,
+  organization: queryResult.data.data.organization,
+});
+
 class App extends Component {
   state = {
     errors: null,
@@ -52,14 +64,8 @@ class App extends Component {
   };
 
   onFetchFromGitHub = path => {
-    const [organization, repository] = path.split('/');
-    axiosGitHubGraphQL
-      .post('', { query: getIssuesOfRepositoryQuery(organization, repository) })
-      .then(result =>
-        this.setState(() => ({
-          errors: result.data.errors,
-          organization: result.data.data.organization,
-        })),
+    getIssuesOfRepository(path).then(queryResult =>
+        this.setState(resolveIssuesQuery(queryResult)),
       );
   };
 
