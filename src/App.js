@@ -25,6 +25,8 @@ const GET_ORGANIZATION = `
 
 class App extends Component {
   state = {
+    errors: null,
+    organization: null,
     path: 'the-road-to-learn-react/the-road-to-learn-react',
   };
 
@@ -39,7 +41,12 @@ class App extends Component {
   onFetchFromGitHub = () => {
     axiosGitHubGraphQL
       .post('', { query: GET_ORGANIZATION })
-      .then(result => console.log(result));
+      .then(result =>
+        this.setState(() => ({
+          errors: result.data.errors,
+          organization: result.data.data.organization,
+        })),
+      );
   };
 
   onSubmit = event => {
@@ -49,7 +56,11 @@ class App extends Component {
   };
 
   render() {
-    const { path } = this.state;
+    const {
+      errors,
+      organization,
+      path,
+    } = this.state;
     return (
       <div>
         <h1>{TITLE}</h1>
@@ -67,9 +78,44 @@ class App extends Component {
           <button type="submit">Search</button>
         </form>
         <hr />
+        {
+          organization ? (
+            <Organization
+              errors={errors}
+              organization={organization}
+            />
+          ) : (
+            <p>No information yet ...</p>
+          )
+        }
       </div>
     );
   }
 }
+
+const Organization = ({
+  errors,
+  organization,
+}) => {
+  if (errors) {
+    return (
+      <p>
+        <strong>Something went wrong:</strong>
+        {errors.map(error => error.message).join(' ')}
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p>
+        <strong>issues from Organization: </strong>
+        <a href={organization.url}>
+          {organization.name}
+        </a>
+      </p>
+    </div>
+  );
+};
 
 export default App;
