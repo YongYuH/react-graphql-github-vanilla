@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import axios from 'axios';
-import logo from './logo.svg';
 import './App.css';
 
 const TITLE = 'React GraphQL GitHub Client';
@@ -90,7 +89,7 @@ const resolveIssuesQuery = (queryResult, cursor) => prevState => {
       repository: {
         ...data.organization.repository,
         issues: {
-          ...data.organization  .repository.issues,
+          ...data.organization.repository.issues,
           edges: updatedIssues,
         }
       }
@@ -136,7 +135,6 @@ class App extends Component {
     const {
       errors,
       organization,
-      repository,
       path,
     } = this.state;
     return (
