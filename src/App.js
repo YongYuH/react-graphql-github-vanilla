@@ -15,20 +15,37 @@ const axiosGitHubGraphQL = axios.create({
 });
 
 const GET_ISSUES_OF_REPOSITORY = `
-  query ($organization: String!, $repository: String!) {
+  query (
+    $cursor: String,
+    $organization: String!,
+    $repository: String!,
+  ) {
     organization(login: $organization) {
       name
       url
       repository(name: $repository) {
         name
         url
-        issues(last: 5) {
+        issues(first: 5, after: $cursor, states: [OPEN]) {
           edges {
             node {
               id
               title
               url
+              reactions(last: 3) {
+                edges {
+                  node {
+                    id
+                    content
+                  }
+                }
+              }
             }
+          }
+          totalCount
+          pageInfo {
+            endCursor
+            hasNextPage
           }
         }
       }
@@ -36,18 +53,50 @@ const GET_ISSUES_OF_REPOSITORY = `
   }
 `;
 
-const getIssuesOfRepository = path => {
+const getIssuesOfRepository = (path, cursor) => {
   const [organization, repository] = path.split('/');
   return axiosGitHubGraphQL.post('', {
     query: GET_ISSUES_OF_REPOSITORY,
-    variables: { organization, repository },
+    variables: {
+      cursor,
+      organization,
+      repository,
+    },
   });
 };
 
-const resolveIssuesQuery = queryResult => ({
-  errors: queryResult.data.errors,
-  organization: queryResult.data.data.organization,
-});
+const resolveIssuesQuery = (queryResult, cursor) => state => {
+  const {
+    data,
+    errors,
+  } = queryResult.data;
+
+  if (!cursor) {
+    return {
+      errors,
+      organization: data.organization,
+    };
+  }
+
+  const { edges: oldIssues } = state.organization.repository.issues;
+  const { edges: newIssues } = data.organization.repository.issues;
+
+  const updatedIssues = [...oldIssues, ...newIssues];
+
+  return {
+    errors,
+    organization: {
+      ...data.organization,
+      repository: {
+        ...data.organization.repository,
+        issues: {
+          ...data.organization  .repository.issues,
+          edges: updatedIssues,
+        }
+      }
+    }
+  };
+};
 
 class App extends Component {
   state = {
@@ -64,10 +113,18 @@ class App extends Component {
     this.setState({ path: event.target.value });
   };
 
-  onFetchFromGitHub = path => {
-    getIssuesOfRepository(path).then(queryResult =>
-        this.setState(resolveIssuesQuery(queryResult)),
-      );
+  onFetchFromGitHub = (path, cursor) => {
+    getIssuesOfRepository(path, cursor).then(queryResult =>
+      this.setState(resolveIssuesQuery(queryResult, cursor)),
+    );
+  };
+
+  onFetchMoreIssues = () => {
+    const {
+      endCursor,
+    } = this.state.organization.repository.issues.pageInfo;
+
+    this.onFetchFromGitHub(this.state.path, endCursor);
   };
 
   onSubmit = event => {
@@ -103,6 +160,7 @@ class App extends Component {
           organization ? (
             <Organization
               errors={errors}
+              onFetchMoreIssues={this.onFetchMoreIssues}
               organization={organization}
             />
           ) : (
@@ -116,6 +174,7 @@ class App extends Component {
 
 const Organization = ({
   errors,
+  onFetchMoreIssues,
   organization,
 }) => {
   if (errors) {
@@ -135,12 +194,18 @@ const Organization = ({
           {organization.name}
         </a>
       </p>
-      <Repository repository={organization.repository} />
+      <Repository
+        onFetchMoreIssues={onFetchMoreIssues}
+        repository={organization.repository}
+      />
     </div>
   );
 };
 
-const Repository = ({ repository }) => (
+const Repository = ({
+  onFetchMoreIssues,
+  repository,
+}) => (
   <div>
     <p>
       <strong>In Repository</strong>
@@ -156,10 +221,27 @@ const Repository = ({ repository }) => (
             <a href={issue.node.url}>
               {issue.node.title}
             </a>
+
+            <ul>
+              {
+                issue.node.reactions.edges.map(reaction => (
+                  <li key={reaction.node.id}>
+                    {reaction.node.content}
+                  </li>
+                ))
+              }
+            </ul>
           </li>
         ))
       }
     </ul>
+
+    <hr />
+    {
+      repository.issues.pageInfo.hasNextPage && (
+        <button onClick={onFetchMoreIssues}>More</button>
+      )
+    }
   </div>
 );
 
