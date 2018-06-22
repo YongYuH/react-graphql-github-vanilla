@@ -65,7 +65,7 @@ const getIssuesOfRepository = (path, cursor) => {
   });
 };
 
-const resolveIssuesQuery = (queryResult, cursor) => state => {
+const resolveIssuesQuery = (queryResult, cursor) => prevState => {
   const {
     data,
     errors,
@@ -78,7 +78,7 @@ const resolveIssuesQuery = (queryResult, cursor) => state => {
     };
   }
 
-  const { edges: oldIssues } = state.organization.repository.issues;
+  const { edges: oldIssues } = prevState.organization.repository.issues;
   const { edges: newIssues } = data.organization.repository.issues;
 
   const updatedIssues = [...oldIssues, ...newIssues];
