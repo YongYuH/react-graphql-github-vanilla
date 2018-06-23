@@ -46,6 +46,9 @@ const GET_ISSUES_OF_REPOSITORY = `
         id
         name
         url
+        stargazers {
+          totalCount
+        }
         viewerHasStarred
         issues(first: 5, after: $cursor, states: [OPEN]) {
           edges {
@@ -102,13 +105,17 @@ const getIssuesOfRepository = (path, cursor) => {
 
 const resolveStarMutation = (mutationResult, mutationType) => prevState => {
   let mutationTypeKey = '';
+  let starCountMutation = 0;
   const { data } = mutationResult.data;
   if (mutationType === 'ADD_STAR') {
     mutationTypeKey = 'addStar';
+    starCountMutation = 1;
   } else {
     mutationTypeKey = 'removeStar';
+    starCountMutation = -1;
   }
   const { viewerHasStarred } = data[mutationTypeKey].starrable;
+  const { totalCount } = prevState.organization.repository.stargazers;
 
   return {
     ...prevState,
@@ -117,6 +124,9 @@ const resolveStarMutation = (mutationResult, mutationType) => prevState => {
       repository: {
         ...prevState.organization.repository,
         viewerHasStarred,
+        stargazers: {
+          totalCount: totalCount + starCountMutation,
+        }
       },
     },
   };
@@ -290,6 +300,7 @@ const Repository = ({
       onClick={() => onStarRepository(repository.id, repository.viewerHasStarred)}
       type="button"
     >
+      {repository.stargazers.totalCount}
       {
         repository.viewerHasStarred ? 'Unstar' : 'Star'
       }
