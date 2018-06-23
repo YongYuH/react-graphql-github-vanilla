@@ -13,6 +13,26 @@ const axiosGitHubGraphQL = axios.create({
   },
 });
 
+const ADD_STAR = `
+  mutation ($repositoryId: ID!) {
+    addStar(input: { starrableId:$repositoryId }) {
+      starrable {
+        viewerHasStarred
+      }
+    }
+  }
+`;
+
+const REMOVE_STAR = `
+  mutation ($repositoryId: ID!) {
+    removeStar(input: { starrableId:$repositoryId }) {
+      starrable {
+        viewerHasStarred
+      }
+    }
+  }
+`;
+
 const GET_ISSUES_OF_REPOSITORY = `
   query (
     $cursor: String,
@@ -23,8 +43,10 @@ const GET_ISSUES_OF_REPOSITORY = `
       name
       url
       repository(name: $repository) {
+        id
         name
         url
+        viewerHasStarred
         issues(first: 5, after: $cursor, states: [OPEN]) {
           edges {
             node {
@@ -52,6 +74,20 @@ const GET_ISSUES_OF_REPOSITORY = `
   }
 `;
 
+const starMutationToRepository = (repositoryId, mutationType) => {
+  let query = '';
+  if (mutationType === 'ADD_STAR') {
+    query = ADD_STAR;
+  } else {
+    query = REMOVE_STAR;
+  }
+
+  return axiosGitHubGraphQL.post('', {
+    query,
+    variables: { repositoryId },
+  });
+};
+
 const getIssuesOfRepository = (path, cursor) => {
   const [organization, repository] = path.split('/');
   return axiosGitHubGraphQL.post('', {
@@ -62,6 +98,28 @@ const getIssuesOfRepository = (path, cursor) => {
       repository,
     },
   });
+};
+
+const resolveStarMutation = (mutationResult, mutationType) => prevState => {
+  let mutationTypeKey = '';
+  const { data } = mutationResult.data;
+  if (mutationType === 'ADD_STAR') {
+    mutationTypeKey = 'addStar';
+  } else {
+    mutationTypeKey = 'removeStar';
+  }
+  const { viewerHasStarred } = data[mutationTypeKey].starrable;
+
+  return {
+    ...prevState,
+    organization: {
+      ...prevState.organization,
+      repository: {
+        ...prevState.organization.repository,
+        viewerHasStarred,
+      },
+    },
+  };
 };
 
 const resolveIssuesQuery = (queryResult, cursor) => prevState => {
@@ -126,6 +184,18 @@ class App extends Component {
     this.onFetchFromGitHub(this.state.path, endCursor);
   };
 
+  onStarRepository = (repositoryId, viewerHasStarred) => {
+    let mutationType = '';
+    if (!viewerHasStarred) {
+      mutationType = 'ADD_STAR';
+    } else {
+      mutationType = 'REMOVE_STAR';
+    }
+    starMutationToRepository(repositoryId, mutationType).then(mutationResult =>
+      this.setState(resolveStarMutation(mutationResult, mutationType)),
+    );
+  };
+
   onSubmit = event => {
     this.onFetchFromGitHub(this.state.path);
     event.preventDefault();
@@ -159,6 +229,7 @@ class App extends Component {
             <Organization
               errors={errors}
               onFetchMoreIssues={this.onFetchMoreIssues}
+              onStarRepository={this.onStarRepository}
               organization={organization}
             />
           ) : (
@@ -173,6 +244,7 @@ class App extends Component {
 const Organization = ({
   errors,
   onFetchMoreIssues,
+  onStarRepository,
   organization,
 }) => {
   if (errors) {
@@ -194,6 +266,7 @@ const Organization = ({
       </p>
       <Repository
         onFetchMoreIssues={onFetchMoreIssues}
+        onStarRepository={onStarRepository}
         repository={organization.repository}
       />
     </div>
@@ -202,6 +275,7 @@ const Organization = ({
 
 const Repository = ({
   onFetchMoreIssues,
+  onStarRepository,
   repository,
 }) => (
   <div>
@@ -211,6 +285,15 @@ const Repository = ({
         {repository.name}
       </a>
     </p>
+
+    <button
+      onClick={() => onStarRepository(repository.id, repository.viewerHasStarred)}
+      type="button"
+    >
+      {
+        repository.viewerHasStarred ? 'Unstar' : 'Star'
+      }
+    </button>
 
     <ul>
       {
